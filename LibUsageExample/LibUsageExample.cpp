@@ -13,19 +13,15 @@
 #include <utils.hpp>
 #include <intel_driver.hpp>
 
-
-HANDLE iqvw64e_device_handle;
-
-
 LONG WINAPI SimplestCrashHandler(EXCEPTION_POINTERS* ExceptionInfo)
 {
 	if (ExceptionInfo && ExceptionInfo->ExceptionRecord)
-		Log(L"[!!] Crash at addr 0x" << ExceptionInfo->ExceptionRecord->ExceptionAddress << L" by 0x" << std::hex << ExceptionInfo->ExceptionRecord->ExceptionCode << std::endl);
+		kdmLog(L"[!!] Crash at addr 0x" << ExceptionInfo->ExceptionRecord->ExceptionAddress << L" by 0x" << std::hex << ExceptionInfo->ExceptionRecord->ExceptionCode << std::endl);
 	else
-		Log(L"[!!] Crash" << std::endl);
+		kdmLog(L"[!!] Crash" << std::endl);
 
-	if (iqvw64e_device_handle)
-		intel_driver::Unload(iqvw64e_device_handle);
+	if (intel_driver::hDevice)
+		intel_driver::Unload();
 
 	return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -44,8 +40,8 @@ int paramExists(const int argc, wchar_t** argv, const wchar_t* param) {
 }
 
 void help() {
-	Log(L"\r\n\r\n[!] Incorrect Usage!" << std::endl);
-	Log(L"[+] Usage: kdmapper.exe [--free][--mdl][--PassAllocationPtr] driver" << std::endl);
+	kdmLog(L"\r\n\r\n[!] Incorrect Usage!" << std::endl);
+	kdmLog(L"[+] Usage: LibUsageExample.exe driver_path" << std::endl);
 }
 
 bool callbackExample(ULONG64* param1, ULONG64* param2, ULONG64 allocationPtr, ULONG64 allocationSize) {
@@ -53,7 +49,7 @@ bool callbackExample(ULONG64* param1, ULONG64* param2, ULONG64 allocationPtr, UL
 	UNREFERENCED_PARAMETER(param2);
 	UNREFERENCED_PARAMETER(allocationPtr);
 	UNREFERENCED_PARAMETER(allocationSize);
-	Log("[+] Callback example called" << std::endl);
+	kdmLog("[+] Callback example called" << std::endl);
 
 	/*
 	This callback occurs before call driver entry and
@@ -85,31 +81,31 @@ int wmain(const int argc, wchar_t** argv) {
 	const std::wstring driver_path = argv[drvIndex];
 
 	if (!std::filesystem::exists(driver_path)) {
-		Log(L"[-] File " << driver_path << L" doesn't exist" << std::endl);
+		kdmLog(L"[-] File " << driver_path << L" doesn't exist" << std::endl);
 		return -1;
 	}
 
-	iqvw64e_device_handle = intel_driver::Load();
+	intel_driver::Load();
 
-	if (iqvw64e_device_handle == INVALID_HANDLE_VALUE)
+	if (intel_driver::hDevice == INVALID_HANDLE_VALUE)
 		return -1;
 
 	std::vector<uint8_t> raw_image = { 0 };
-	if (!utils::ReadFileToMemory(driver_path, &raw_image)) {
-		Log(L"[-] Failed to read image to memory" << std::endl);
-		intel_driver::Unload(iqvw64e_device_handle);
+	if (!kdmUtils::ReadFileToMemory(driver_path, &raw_image)) {
+		kdmLog(L"[-] Failed to read image to memory" << std::endl);
+		intel_driver::Unload();
 		return -1;
 	}
 
 	NTSTATUS exitCode = 0;
-	if (!kdmapper::MapDriver(iqvw64e_device_handle, raw_image.data(), 0, 0, free, true, kdmapper::AllocationMode::AllocatePool, false, callbackExample, &exitCode)) {
-		Log(L"[-] Failed to map " << driver_path << std::endl);
-		intel_driver::Unload(iqvw64e_device_handle);
+	if (!kdmapper::MapDriver(raw_image.data(), 0, 0, true, true, kdmapper::AllocationMode::AllocatePool, false, callbackExample, &exitCode)) {
+		kdmLog(L"[-] Failed to map " << driver_path << std::endl);
+		intel_driver::Unload();
 		return -1;
 	}
 
-	if (!intel_driver::Unload(iqvw64e_device_handle)) {
-		Log(L"[-] Warning failed to fully unload vulnerable driver " << std::endl);
+	if (!intel_driver::Unload()) {
+		kdmLog(L"[-] Warning failed to fully unload vulnerable driver " << std::endl);
 	}
-	Log(L"[+] success" << std::endl);
+	kdmLog(L"[+] success" << std::endl);
 }
